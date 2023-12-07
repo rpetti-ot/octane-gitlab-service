@@ -49,8 +49,8 @@ public class HooksUpdateRunnable implements Runnable {
     static public final int INTERVAL = 60;
     GitLabApi gitLabApi;
     Date lastUpdateTime;
+    private HashSet<Long> hookedProjectIds = new HashSet<Long>();
     private URL webhookURL;
-    private long lastUpdatedProjectId = 0;
     static final Logger log = LogManager.getLogger(HooksUpdateRunnable.class);
 
     public HooksUpdateRunnable(GitLabApiWrapper gitLabApiWrapper, URL webhookURL) {
@@ -69,39 +69,31 @@ public class HooksUpdateRunnable implements Runnable {
     public void addHooksToNewProjects() {
 
         try {
-
-            ProjectFilter filter = new ProjectFilter().withIdAfter(lastUpdatedProjectId).withMembership(true)
+            ProjectFilter filter = new ProjectFilter().withMembership(true)
                     .withMinAccessLevel(AccessLevel.MAINTAINER);
             List<Project> projects = gitLabApi.getProjectApi().getProjects(filter);
 
             if (projects.size() > 0) {
                 projects.stream().forEach(project -> {
-                    try {
-                        HooksHelper.addWebHookToProject(gitLabApi, webhookURL, project.getId(), true);
-                    } catch (GitLabApiException e) {
-                        log.warn("Failed to create GitLab web hooks", e);
+                    if(!this.hookedProjectIds.contains(project.getId())) {
+                        try {
+                            HooksHelper.addWebHookToProject(gitLabApi, webhookURL, project.getId(), true);
+                            this.hookedProjectIds.add(project.getId());
+                        } catch (GitLabApiException e) {
+                            log.warn("Failed to create GitLab web hooks", e);
+                        }
                     }
-
                 });
-
-                long maxId = projects.stream()
-                        .max(Comparator.comparing(Project::getId))
-                        .orElseThrow(NoSuchElementException::new).getId();
-                //update the index of the last updated project.
-                lastUpdatedProjectId = Math.max(maxId, lastUpdatedProjectId);
             }
 
         } catch (GitLabApiException e) {
             log.error("Failed to get GitLab projects", e);
-            if (lastUpdatedProjectId == 0) {
-                throw new RuntimeException(e);
-            }
         }
     }
 
     @Override
     public void run() {
-        log.info("Start scanning for new projects and adding a hook.Last Updated Project Id =" +lastUpdatedProjectId);
+        log.info("Start scanning for new projects and adding a hook.");
         addHooksToNewProjects();
     }
 }

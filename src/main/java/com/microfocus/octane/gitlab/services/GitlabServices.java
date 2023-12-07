@@ -81,6 +81,7 @@ public class GitlabServices {
     private final GitLabApiWrapper gitLabApiWrapper;
     private GitLabApi gitLabApi;
     private boolean cleanupOnly =false;
+    private boolean cleanupOnShutdown =true;
     private  ScheduledExecutorService testCleanupExecutor;
     private ScheduledFuture<?> testCleanupScheduledFuture;
     private  ScheduledExecutorService updateHooksExecutor;
@@ -97,6 +98,9 @@ public class GitlabServices {
         if(applicationArguments.containsOption("cleanupOnly") && (applicationArguments.getOptionValues("cleanupOnly").size()>0)){
             cleanupOnly = Boolean.parseBoolean(applicationArguments.getOptionValues("cleanupOnly").get(0));
         }
+        if(applicationArguments.containsOption("cleanupOnShutdown") && (applicationArguments.getOptionValues("cleanupOnShutdown").size()>0)){
+            cleanupOnShutdown = Boolean.parseBoolean(applicationArguments.getOptionValues("cleanupOnShutdown").get(0));
+        }
     }
 
     @PostConstruct
@@ -106,12 +110,12 @@ public class GitlabServices {
         gitLabApi = gitLabApiWrapper.getGitLabApi();
 
         try {
-            ProjectFilter filter = new ProjectFilter().withMembership(true)
-                    .withMinAccessLevel(AccessLevel.MAINTAINER);
-
-            List<Project> projects =  gitLabApi.getProjectApi().getProjects(filter);
-
             if(cleanupOnly){
+                ProjectFilter filter = new ProjectFilter().withMembership(true)
+                        .withMinAccessLevel(AccessLevel.MAINTAINER);
+
+                List<Project> projects =  gitLabApi.getProjectApi().getProjects(filter);
+
                 log.info("start with cleanup process");
                 HooksHelper.deleteWebHooks(projects,webhookURL,gitLabApi);
             }else {
@@ -149,15 +153,15 @@ public class GitlabServices {
         try {
 
             stopExecutors();
+            if(cleanupOnShutdown) {
+                log.info("Destroying GitLab webhooks ...");
 
-            log.info("Destroying GitLab webhooks ...");
+                ProjectFilter filter = new ProjectFilter().withMembership(true)
+                        .withMinAccessLevel(AccessLevel.MAINTAINER);
 
-            ProjectFilter filter = new ProjectFilter().withMembership(true)
-                    .withMinAccessLevel(AccessLevel.MAINTAINER);
-
-            List<Project> projects = gitLabApi.getProjectApi().getProjects(filter);
-            HooksHelper.deleteWebHooks(projects,webhookURL,gitLabApi);
-
+                List<Project> projects = gitLabApi.getProjectApi().getProjects(filter);
+                HooksHelper.deleteWebHooks(projects,webhookURL,gitLabApi);
+            }
         } catch (Exception e) {
             log.warn("Failed to destroy GitLab webhooks", e);
         }
@@ -278,10 +282,16 @@ public class GitlabServices {
     public List<CIParameter> getParameters(ParsedPath project) {
         List<CIParameter> parametersList = new ArrayList<>();
         List<Variable> projectVariables = VariablesHelper.getVariables(project,gitLabApi,applicationSettings.getConfig());
-
         projectVariables.forEach(var -> {
             CIParameter param = dtoFactory.newDTO(CIParameter.class);
-            param.setType(CIParameterType.STRING);
+            CIParameterType type = CIParameterType.STRING;
+            if(var.getVariableType() == Variable.Type.FILE) {
+                type = CIParameterType.FILE;
+            }
+            if(var.getMasked() || var.getProtected()) {
+                type = CIParameterType.PASSWORD;
+            }
+            param.setType(type);
             param.setName(var.getKey());
             param.setDefaultValue(var.getValue());
             parametersList.add(param);
@@ -294,4 +304,7 @@ public class GitlabServices {
         return cleanupOnly;
     }
 
+    public boolean isCleanupOnShutdown() {
+        return cleanupOnShutdown;
+    }
 }

@@ -238,14 +238,24 @@ The ALM Octane Test Framework allows the running of separate automated tests fro
 
 ## Cleanup webhooks
 
+By default, the service will clean up its webhooks from all projects the service user has access to whenever the service is stopped.
+
 It is possible to start the service in clean mode.  
 This mode allows you to clear all hooks from the GitLab server.
 
 To clean the webhooks run the following command line:
 
-```  
+```
 java –jar octane-gitlab-service-<version>.jar --cleanupOnly=true
 ```
+
+Conversely, you may want to disable automatic cleanup of the hooks.
+You can disable cleanup on shutdown using the following command line:
+
+```
+java –jar octane-gitlab-service-<version>.jar --cleanupOnShutdown=false
+```
+
 ## Password encryption
 
 Values of the properties marked as 'sensitive' in the above list can be encrypted before writing them down in the *'application.properties'* file. To encrypt a sensitive token, run the following command line:
