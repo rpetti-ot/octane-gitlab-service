@@ -170,11 +170,15 @@ public class GitlabServices {
     private void stopExecutors() {
         log.info("stop Executors");
 
-        updateHooksScheduledFuture.cancel(true);
-        updateHooksExecutor.shutdown();
+        if(updateHooksScheduledFuture!=null)
+            updateHooksScheduledFuture.cancel(true);
+        if(updateHooksExecutor!=null)
+            updateHooksExecutor.shutdown();
 
-        testCleanupScheduledFuture.cancel(true);
-        testCleanupExecutor.shutdown();
+        if(testCleanupScheduledFuture!=null)
+            testCleanupScheduledFuture.cancel(true);
+        if(testCleanupExecutor!=null)
+            testCleanupExecutor.shutdown();
 
     }
 
